@@ -1,0 +1,13 @@
+[Unit]
+Description=Linux SensorHub userspace daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sensorhubd -c /etc/sensorhub/sensorhub.conf
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+

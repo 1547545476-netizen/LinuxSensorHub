@@ -1,0 +1,9 @@
+GPL-2.0-only
+
+Linux SensorHub includes a Linux kernel module. The kernel module is licensed
+under GPL-2.0-only. Userspace code is provided as part of the same learning
+project for simplicity.
+
+This project is written for education, interview preparation, and personal
+portfolio use.
+
