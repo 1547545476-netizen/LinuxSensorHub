@@ -8,6 +8,7 @@ set(SENSORHUB_COMMON_SOURCES
     src/storage/log_writer.cpp
     src/device/sensor_device.cpp
     src/net/tcp_broadcaster.cpp
+    src/net/control_server.cpp
     src/reactor/epoll_loop.cpp
 )
 

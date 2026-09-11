@@ -1,5 +1,11 @@
 # 源码导读
 
+## 控制接口回归修复
+
+`userspace/src/net/control_server.cpp` 保存每个非阻塞控制连接的请求缓冲区和发送偏移。连接成功不代表命令已经到达，所以收到 `EAGAIN` 只返回事件循环，不关闭连接；命令以换行结束，回复遇到短写则继续监听可写事件。`tests/unit/test_control_server.cpp` 使用 Linux `socketpair` 检查延迟、分段、短写及断开等路径。
+
+`userspace/src/reactor/epoll_loop.cpp` 的回调表现在保存 `shared_ptr<Callback>`：`run_once()` 持有一份临时共享指针，让回调注销自己时仍可安全执行到结尾。没有复制函数本体，因此有状态 lambda 的状态仍可保留。
+
 这份文档按“完全初学者”的顺序读，不要求你一开始就懂内核。
 
 ## 第 1 步：先看公共协议
@@ -191,4 +197,3 @@ worker 线程落盘并通过 UDP/TCP 导出，
 ```
 
 这条线讲顺了，项目就立起来了。
-
