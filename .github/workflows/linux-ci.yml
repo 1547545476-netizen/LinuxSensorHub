@@ -1,0 +1,57 @@
+name: Linux CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 只需读取源码，不向仓库写入文件，也不需要 OpenAI 密钥。
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulated:
+    name: Ubuntu 24.04 simulated tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        # actions/checkout v4.3.1，固定提交以避免浮动标签变化。
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake
+
+      - name: Show environment
+        run: |
+          uname -a
+          g++ --version
+          cmake --version
+
+      - name: Configure and build
+        # Debug 保留 assert；现有单元测试使用 assert 检查结果。
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build -j2
+
+      - name: Unit and integration tests
+        run: ctest --test-dir build --output-on-failure --timeout 30
+
+      - name: Simulated smoke test
+        run: timeout --kill-after=5s 60s bash scripts/smoke_simulated.sh
+
+      - name: Simulated multi-client test
+        env:
+          CLIENTS: "8"
+          LINES: "50"
+        run: timeout --kill-after=5s 60s bash scripts/stress_simulated.sh

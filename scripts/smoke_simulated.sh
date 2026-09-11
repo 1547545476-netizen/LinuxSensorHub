@@ -29,8 +29,11 @@ EOF
 PID="$!"
 
 cleanup() {
-  "$BUILD/userspace/sensorctl" shutdown -c "$TMP/sensorhub.conf" >/dev/null 2>&1 || true
-  wait "$PID" >/dev/null 2>&1 || true
+  # 异常路径只清理本脚本创建的进程；不能把清理成功当作正常关闭通过。
+  if [[ -n "${PID:-}" ]]; then
+    kill -KILL "$PID" >/dev/null 2>&1 || true
+    wait "$PID" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -43,5 +46,8 @@ done
 "$BUILD/userspace/sensorctl" stats -c "$TMP/sensorhub.conf"
 test -s "$TMP/logs/sensorhub.log"
 
+REPLY="$("$BUILD/userspace/sensorctl" shutdown -c "$TMP/sensorhub.conf")"
+[[ "$REPLY" == "ok" ]]
+wait "$PID"
+unset PID
 echo "smoke test passed"
-

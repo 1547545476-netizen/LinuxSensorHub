@@ -55,7 +55,7 @@ Linux SensorHub 模拟真实嵌入式 Linux 设备上的传感器数据链路：
 | 数据队列 | `userspace/include/bounded_queue.hpp` | 主线程和 worker 线程之间传递数据 |
 | 存储 | `userspace/src/storage` | 把 sample 格式化成文本并做日志轮转 |
 | TCP 广播 | `userspace/src/net` | 监听 TCP 端口，把实时 sample 推送给订阅客户端 |
-| 控制面 | `userspace/src/main.cpp` | Unix Domain Socket 处理 stats/reload/shutdown |
+| 控制面 | `userspace/src/net/control_server.cpp`、`userspace/src/main.cpp` | 前者负责连接、收齐命令与回复，后者执行 stats/reload/shutdown |
 
 ## 数据流
 
@@ -77,3 +77,21 @@ Linux SensorHub 模拟真实嵌入式 Linux 设备上的传感器数据链路：
 - `signalfd`：把信号变成 fd，统一纳入事件循环。
 - `BoundedQueue`：队列有容量限制，能讨论背压和丢包策略。
 - `sysfs/debugfs`：驱动运行时配置和调试状态，贴近真实驱动开发。
+
+## 开发与验证链路
+
+控制连接的事件链路为 `accept4 -> EPOLLIN -> 缓冲至换行 -> 执行命令 -> send`。遇到暂不可读的 `EAGAIN` 会保留连接；发送暂不可写时监听 `EPOLLOUT` 并保留偏移。处理完成后先注销 epoll，再关闭 fd。回调使用共享所有权，以支持执行中的回调安全注销自己；这是首次 GitHub CI 暴露的关闭时序问题对应的修复。
+
+```text
+本地 Codex + Git -> feature 分支 -> GitHub PR
+                                      |
+                                      v
+                              Ubuntu 24.04 CI
+                     Debug 构建 -> CTest -> 冒烟/多客户端
+                                      |
+                             人工审查后合并 main
+
+独立验证：Ubuntu 虚拟机 -> 匹配内核头文件 -> 驱动编译/加载/测试/卸载
+```
+
+CI 不参与程序运行时数据链路，也不能代替内核驱动验证。规则与操作见 [GitHub + Codex 协作](github-codex-workflow.md)；流水线实现见 [linux-ci.yml](../.github/workflows/linux-ci.yml)。

@@ -32,8 +32,10 @@ EOF
 PID="$!"
 
 cleanup() {
-  "$BUILD/userspace/sensorctl" shutdown -c "$TMP/sensorhub.conf" >/dev/null 2>&1 || true
-  wait "$PID" >/dev/null 2>&1 || true
+  if [[ -n "${PID:-}" ]]; then
+    kill -KILL "$PID" >/dev/null 2>&1 || true
+    wait "$PID" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -52,4 +54,8 @@ for client_pid in $CLIENT_PIDS; do
 done
 "$BUILD/userspace/sensorctl" stats -c "$TMP/sensorhub.conf"
 wc -l "$TMP"/client_*.log
+REPLY="$("$BUILD/userspace/sensorctl" shutdown -c "$TMP/sensorhub.conf")"
+[[ "$REPLY" == "ok" ]]
+wait "$PID"
+unset PID
 echo "stress test passed"

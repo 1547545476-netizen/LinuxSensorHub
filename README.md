@@ -32,7 +32,7 @@ sensor_subscribe -- TCP --> 订阅实时采样
 | 数据输出 | 文本日志与轮转、UDP 导出、TCP 客户端广播 |
 | 工程管理 | CMake、Makefile、CTest、单元测试、模拟模式集成测试、systemd 示例 |
 
-详细资料：[架构说明](docs/architecture.md)、[源码导读](docs/source-walkthrough.md)、[参考项目与边界](docs/references.md)。
+详细资料：[架构说明](docs/architecture.md)、[源码导读](docs/source-walkthrough.md)、[参考项目与边界](docs/references.md)、[GitHub + Codex 协作](docs/github-codex-workflow.md)。
 
 ## 构建与测试
 
@@ -47,6 +47,10 @@ ctest --test-dir build --output-on-failure --timeout 30
 ```
 
 CTest 包含配置/队列单元测试及模拟服务集成测试。集成测试会创建本地服务，使用 TCP 9090；请先停止手动运行的同端口实例，避免端口冲突。
+
+控制连接另有 C++ 回归测试，覆盖延迟/分段命令、慢客户端不阻塞其他请求、短写、超长输入、半关闭和提前断开。控制协议为一条换行结尾的命令/连接，命令最长 127 字节，同时最多保留 64 个未完成控制连接。冒烟与多客户端脚本会检查 `shutdown` 回复及服务退出，之后才报告成功。
+
+仓库包含 [Ubuntu 自动测试工作流](.github/workflows/linux-ci.yml)：面向 main 的 PR 及 main 推送会执行 Debug 构建、CTest、模拟冒烟和多客户端测试。实际结果以对应提交的 GitHub Actions 记录为准；工作流不验证驱动加载，也不调用 OpenAI API。
 
 ## 模拟模式演示
 
@@ -111,6 +115,8 @@ userspace/    C++ 服务、辅助工具及 CMake 构建文件
 tests/        单元测试与集成测试
 scripts/      模拟运行、冒烟、压力和驱动检查脚本
 docs/         架构、源码导读与参考资料
+.github/      Ubuntu CI 与 PR 检查模板
+AGENTS.md     Codex 项目协作与教学规则
 ```
 
 ## 安全与发布边界

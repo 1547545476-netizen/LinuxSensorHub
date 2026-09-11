@@ -1,5 +1,6 @@
 #include "bounded_queue.hpp"
 #include "config.hpp"
+#include "control_server.hpp"
 #include "epoll_loop.hpp"
 #include "fd.hpp"
 #include "log_writer.hpp"
@@ -145,7 +146,7 @@ std::string build_stats_text(const RuntimeStats& stats,
     return text;
 }
 
-void handle_control_client(int listen_fd,
+std::string handle_control_command(std::string cmd,
                            const std::string& config_path,
                            RuntimeStats& stats,
                            BoundedQueue<sensorhub_sample>& queue,
@@ -154,26 +155,6 @@ void handle_control_client(int listen_fd,
                            bool simulate,
                            SensorDevice* device)
 {
-    sockaddr_un client_addr{};
-    socklen_t addr_len = sizeof(client_addr);
-    UniqueFd client(accept4(listen_fd, reinterpret_cast<sockaddr*>(&client_addr),
-                            &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC));
-    if (!client.valid()) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return;
-        }
-        throw sys_error("accept control client");
-    }
-
-    char buf[128]{};
-    ssize_t n = read(client.get(), buf, sizeof(buf) - 1);
-    if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return;
-        }
-        throw sys_error("read control command");
-    }
-    std::string cmd(buf, static_cast<std::size_t>(n));
     while (!cmd.empty() && (cmd.back() == '\n' || cmd.back() == '\r' || cmd.back() == ' ')) {
         cmd.pop_back();
     }
@@ -197,7 +178,7 @@ void handle_control_client(int listen_fd,
         reply = "unknown command\n";
     }
 
-    write(client.get(), reply.data(), reply.size());
+    return reply;
 }
 
 std::string parse_config_arg(int argc, char** argv) {
@@ -292,6 +273,12 @@ int main(int argc, char** argv) {
 
         bool running = true;
         EpollLoop loop;
+        // 连接到达和命令到达是两个事件，ControlServer 保留连接直到收齐一行。
+        ControlServer control(loop, [&](std::string cmd) {
+            return handle_control_command(std::move(cmd), config_path, stats, queue,
+                                          tcp, running, simulate,
+                                          simulate ? nullptr : &real_device);
+        });
 
         loop.add(source_fd, EPOLLIN, [&](uint32_t) {
             for (const auto& sample : read_samples()) {
@@ -308,8 +295,7 @@ int main(int argc, char** argv) {
         });
 
         loop.add(control_fd.get(), EPOLLIN, [&](uint32_t) {
-            handle_control_client(control_fd.get(), config_path, stats, queue,
-                                  tcp, running, simulate, simulate ? nullptr : &real_device);
+            control.accept_ready(control_fd.get());
         });
 
         loop.add(tcp.listen_fd(), EPOLLIN, [&](uint32_t) {
